@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+.env
+
+# Streamlit secrets (NO subir)
+.streamlit/secrets.toml
