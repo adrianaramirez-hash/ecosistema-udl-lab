@@ -34,14 +34,42 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
-def get_gspread_client():
+def _pick_service_account_from_secrets():
+    """
+    Acepta cualquiera de estas llaves en Secrets:
+    - [gcp_service_account]
+    - [gcp_service_account_json]
+    """
     sa = st.secrets.get("gcp_service_account", None)
+    if sa:
+        return sa, "gcp_service_account"
+
+    sa = st.secrets.get("gcp_service_account_json", None)
+    if sa:
+        return sa, "gcp_service_account_json"
+
+    return None, None
+
+def get_gspread_client():
+    sa, key_name = _pick_service_account_from_secrets()
     if not sa:
-        st.error("No encontré [gcp_service_account] en Secrets. Revisa Settings → Secrets.")
+        st.error("No encontré [gcp_service_account] ni [gcp_service_account_json] en Secrets. Revisa Settings → Secrets.")
+        st.stop()
+
+    # Validaciones mínimas para detectar secrets incompletos
+    required = ["type", "project_id", "private_key", "client_email"]
+    missing = [k for k in required if k not in sa or not str(sa.get(k, "")).strip()]
+    if missing:
+        st.error(f"El bloque [{key_name}] existe, pero le faltan campos: {missing}")
+        st.stop()
+
+    pk = str(sa.get("private_key", ""))
+    if "BEGIN PRIVATE KEY" not in pk or "END PRIVATE KEY" not in pk:
+        st.error("Tu private_key no parece completa (no contiene BEGIN/END). Pega la llave completa en Secrets.")
         st.stop()
 
     creds = Credentials.from_service_account_info(sa, scopes=SCOPES)
-    return gspread.authorize(creds)
+    return gspread.authorize(creds), key_name
 
 def list_tabs(sh):
     return [ws.title for ws in sh.worksheets()]
@@ -58,8 +86,8 @@ def ws_head(sh, tab_name, n=8):
 # Run
 # ======================================================
 try:
-    client = get_gspread_client()
-    st.success("✅ Autenticación OK (service account leído desde Secrets).")
+    client, used_key = get_gspread_client()
+    st.success(f"✅ Autenticación OK (Secrets: [{used_key}]).")
 except Exception as e:
     st.error(f"❌ Falló autenticación: {e}")
     st.stop()
