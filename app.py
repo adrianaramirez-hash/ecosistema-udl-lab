@@ -3,15 +3,32 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import settings
-
 st.set_page_config(page_title="Ecosistema UDL - LAB (Diagnóstico)", layout="wide")
 st.title("Ecosistema UDL - LAB — Diagnóstico Google Sheets")
 st.caption("Solo lectura. Valida conexión, acceso y nombres de hojas.")
 
-# ----------------------------
+# ======================================================
+# Config LAB (hardcodeado para diagnóstico)
+# ======================================================
+EXAMENES_SHEET_ID = "1E8BKNLbBaFz0GkMuF-U6La0SAOa_A0BvsGZM0H-r-B4"
+ACCESOS_CATALOGO_SHEET_ID = "1D2vmJvxx282BX2C2AcOcn1TL8e6KfdD893Bd4PEGduo"
+
+TABS_EXAMENES = {
+    "CAT_FORMULARIOS": "CAT_FORMULARIOS",
+    "CATALOGO_EXAMENES": "CATALOGO_EXAMENES",
+    "MAPEO_PREGUNTAS": "MAPEO_PREGUNTAS",
+    "RESPUESTAS_LARGAS": "RESPUESTAS_LARGAS",
+    "BASE_CONSOLIDADA": "BASE_CONSOLIDADA",
+}
+
+TABS_CORE = {
+    "ACCESOS": "ACCESOS__LAB",
+    "CATALOGO_MAESTRO": "CATALOGO_MAESTRO__LAB",
+}
+
+# ======================================================
 # Auth / Client
-# ----------------------------
+# ======================================================
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -37,10 +54,9 @@ def ws_head(sh, tab_name, n=8):
     df = pd.DataFrame(values[1:], columns=values[0])
     return df.head(n)
 
-# ----------------------------
-# UI
-# ----------------------------
-client = None
+# ======================================================
+# Run
+# ======================================================
 try:
     client = get_gspread_client()
     st.success("✅ Autenticación OK (service account leído desde Secrets).")
@@ -52,11 +68,10 @@ colA, colB = st.columns(2)
 
 with colA:
     st.subheader("Sheet: Exámenes (LAB_RESPUESTAS_FORMS)")
-    exam_id = settings.SHEETS["EXAMENES_SHEET_ID"]
-    st.code(exam_id, language="text")
+    st.code(EXAMENES_SHEET_ID, language="text")
 
     try:
-        sh_exam = client.open_by_key(exam_id)
+        sh_exam = client.open_by_key(EXAMENES_SHEET_ID)
         tabs = list_tabs(sh_exam)
         st.success(f"✅ Acceso OK. Tabs detectadas: {len(tabs)}")
         st.write(tabs)
@@ -66,44 +81,39 @@ with colA:
 
 with colB:
     st.subheader("Sheet: Accesos + Catálogo (LAB)")
-    core_id = settings.SHEETS.get("ACCESOS_CATALOGO_SHEET_ID", "")
-    st.code(core_id, language="text")
+    st.code(ACCESOS_CATALOGO_SHEET_ID, language="text")
 
-    if not core_id or "PEGA_AQUI" in core_id:
-        st.warning("⚠️ Falta configurar ACCESOS_CATALOGO_SHEET_ID en config/settings.example.py")
-    else:
-        try:
-            sh_core = client.open_by_key(core_id)
-            tabs2 = list_tabs(sh_core)
-            st.success(f"✅ Acceso OK. Tabs detectadas: {len(tabs2)}")
-            st.write(tabs2)
-        except Exception as e:
-            st.error(f"❌ No pude abrir el Sheet de accesos/catálogo: {e}")
+    try:
+        sh_core = client.open_by_key(ACCESOS_CATALOGO_SHEET_ID)
+        tabs2 = list_tabs(sh_core)
+        st.success(f"✅ Acceso OK. Tabs detectadas: {len(tabs2)}")
+        st.write(tabs2)
+    except Exception as e:
+        st.error(f"❌ No pude abrir el Sheet de accesos/catálogo: {e}")
+        st.stop()
 
 st.divider()
 st.subheader("Lectura de prueba (heads)")
 
 # Lectura de tabs del sheet de exámenes
-for key, tab in settings.TABS_EXAMENES.items():
-    with st.expander(f"Ver primeras filas: {tab}"):
+for _, tab in TABS_EXAMENES.items():
+    with st.expander(f"Ver primeras filas: {tab}", expanded=False):
         try:
             df = ws_head(sh_exam, tab, n=10)
             st.dataframe(df, use_container_width=True)
         except Exception as e:
             st.error(f"No pude leer {tab}: {e}")
 
-# Lectura de tabs del sheet core si está configurado
-core_id = settings.SHEETS.get("ACCESOS_CATALOGO_SHEET_ID", "")
-if core_id and "PEGA_AQUI" not in core_id:
-    st.divider()
-    st.subheader("Lectura de prueba (core)")
+st.divider()
+st.subheader("Lectura de prueba (core)")
 
-    for key, tab in settings.TABS_CORE.items():
-        with st.expander(f"Ver primeras filas: {tab}"):
-            try:
-                df = ws_head(sh_core, tab, n=10)
-                st.dataframe(df, use_container_width=True)
-            except Exception as e:
-                st.error(f"No pude leer {tab}: {e}")
+# Lectura de tabs del sheet core
+for _, tab in TABS_CORE.items():
+    with st.expander(f"Ver primeras filas: {tab}", expanded=False):
+        try:
+            df = ws_head(sh_core, tab, n=10)
+            st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"No pude leer {tab}: {e}")
 
 st.info("Si todo sale en verde, ya podemos integrar el módulo Exámenes v2.")
